@@ -1,0 +1,480 @@
+Kafka Course Notes
+
+https://github.com/simplesteph/kafka-beginners-course
+
+Having problems downloading?
+
+Try using a VPN service such as TunnelBear (https://www.tunnelbear.com/, it's free!) to VPN into another country
+where you should be able to download the course content
+
+
+UI Tool
+www.kafkatool.com
+
+KafkaCat as a replacement for Kafka CLI
+KafkaCat (https://github.com/edenhill/kafkacat) is an open-source alternative to using the Kafka CLI,
+created by Magnus Edenhill.
+While KafkaCat is not used in this course, if you have any interest in trying it out,
+I recommend reading: https://medium.com/@coderunner/debugging-with-kafkacat-df7851d21968
+
+
+Elasticsearch in the Cloud - Bonsai
+- provision a free 3-node cluster
+https://app.bonsai.io
+
+
+Topics, partitions, and offsets
+
+Topics - a particular stream of data
+- similar to a table in a database (without all the constraints)
+- you can have as many topics as you want
+- a topic is identified by its name
+
+Partitions - Topics are split into Partitions
+- they have numbers, starting at 0 - n
+- each Message within partition gets an incremental id, called Offset
+- data is kept for a limited time (default is one week)
+
+
+Kafka cluster is composed of multiple brokers (servers)
+- a good number to get started is 3 brokers.
+- some big clusters have over 100 brokers
+
+
+Topic replication factor - usually between 2 and 3. 3 is better
+- if a broker is down, another broker can serve the data
+- at any time only one broker can be a leader for a given partition
+- ISR - in-sync replica
+- stored in zookeeper
+
+
+Producers
+- producers can choose to send a key with the message
+- if key=null, is sent round robin to partitions
+- if key is sent, then all messages for that key will always go to the same partition
+- use key if you need message ordering for a specific field (ex: truck_id also used as key)
+
+Consumers
+- read data from a topic
+- know which broker to read from (taken care for you)
+- if broker fails, consumers know how to recover
+- data is read in order, within each partition by offset
+
+Consumer Groups
+- max number of consumers to number of partitions
+
+Consumer Offets
+- Kafka stores the offsets at which a consumer group has been reading
+- stored in Kafak topic named "__consumer_offsets"
+- if a consumer dies, it will be able to read back where it left off
+
+Kafka Broker Discovery
+- every Kafka broker is also called a "bootstrap server"
+- you only need to connect to one broker and you will be connected to the entire cluster
+- each broker knows about all brokers, topics and partitions (metadata)
+
+Zookeeper 
+- Kafka can't work without zookeeper
+- manages brokers (keeps a list of them)
+- helps with leader election for partitions
+- sends notifications to Kafka in case of changes (e.g. new topic, broker dies, broker comes up, delete topics, etc...)
+- by design operates with an odd number of servers (3,5,7)
+- behind the scenes, we do not deal with zookeeper directly
+
+Kafka Guarantees
+- with replication factor of N, producers and consumers can tolerate up to N-1 brokers being down
+- this is why replication factor of 3 is good
+  - allows for one broker to be taken down for maintenance
+  - allows for another broker to be taken down unexpectedly
+
+---
+
+Install Kafka - follow instructions from video for Linux
+
+# download compressed tar file and untar it
+
+# edit path
+vi .bashrc
+# add to bottom
+export PATH=/home/kits/kafka/kafka_2.12-2.3.0/bin:$PATH
+
+# start zookeeper
+cd /home/kits/kafka/kafka_2.12-2.3.0
+zookeeper-server-start.sh config/zookeeper.properties
+# start as daemon
+zookeeper-server-start.sh -daemon config/zookeeper.properties
+
+# start kafka
+cd /home/kits/kafka/kafka_2.12-2.3.0
+mkdir data/kafka
+kafka-server-start.sh config/server.properties
+kafka-server-start.sh -daemon config/server.properties
+
+Elasticsearch
+
+install instructions
+https://www.elastic.co/guide/en/elasticsearch/reference/current/getting-started-install.html
+
+edit 
+/home/kits/elasticsearch/elasticsearch-7.3.0/config/elasticsearch.yml
+#SPENCER:Added
+network.host: 192.168.175.59
+discovery.type: single-node
+
+# can not run elasticsearch as root
+su geo
+cd /home/kits/elasticsearch/elasticsearch-7.3.0/bin
+./elasticsearch
+
+-----
+
+CLI commands
+
+# create a topic
+kafka-topics.sh --zookeeper 127.0.0.1:2181 --topic first_topic --create --partitions 3 --replication-factor 2
+Error while executing topic command : Replication factor: 2 larger than available brokers: 1
+
+kafka-topics.sh --zookeeper 127.0.0.1:2181 --topic first_topic --create --partitions 3 --replication-factor 1
+kafka-topics.sh --zookeeper 127.0.0.1:2181 --topic second_topic --create --partitions 6 --replication-factor 1
+
+# list topics
+kafka-topics.sh --zookeeper 127.0.0.1:2181 --list
+
+# describe a topics
+kafka-topics.sh --zookeeper 127.0.0.1:2181 --topic first_topic --describe
+
+# delete a topic
+kafka-topics.sh --zookeeper 127.0.0.1:2181 --topic second_topic --delete
+
+# producer console
+kafka-console-producer.sh --broker-list 127.0.0.1:9092 --topic first_topic
+>hello John
+>message 2
+>message 3
+>just another message 4
+>^C
+
+kafka-console-producer.sh --broker-list 127.0.0.1:9092 --topic first_topic --producer-property acks=all
+>some message that is acked
+>just for fun
+>fun learning!
+>^C
+
+# consumer console - this will listen for messages that are sent after starting this
+kafka-console-consumer.sh --bootstrap-server 127.0.0.1:9092 --topic first_topic
+
+# list message from the beginning and new ones that arrive
+kafka-console-consumer.sh --bootstrap-server 127.0.0.1:9092 --topic first_topic --from-beginning
+
+# consumer groups
+# note: multiple consumers in group will receive one message at a time to each consumer in the group, not all messages
+# in other words, messages are split between the consumers in the group
+# also, if same number of consumers in a group as partitions then each message received in partition will go to consumer
+# however, if 3 partitions and 2 consumers in groups, 2 partitions will to to one consumer and 1 partition to another consumer
+kafka-console-consumer.sh --bootstrap-server 127.0.0.1:9092 --topic first_topic --group my-first-application
+
+# list consumer groups
+kafka-consumer-groups.sh --bootstrap-server 127.0.0.1:9092 --list
+
+# describe a consumer group
+kafka-consumer-groups.sh --bootstrap-server 127.0.0.1:9092 --describe --group my-first-application
+output:
+GROUP                TOPIC           PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             CONSUMER-ID     HOST            CLIENT-ID
+...
+
+# reset the offsets for a consumer group
+kafka-consumer-groups.sh --bootstrap-server 127.0.0.1:9092 --topic first_topic --group my-first-application --reset-offsets --to-earliest --execute
+
+# shift the offset by -2
+kafka-consumer-groups.sh --bootstrap-server 127.0.0.1:9092 --topic first_topic --group my-first-application --reset-offsets --shift-by -2 --execute
+
+# look at the offset values
+kafka-consumer-groups.sh --bootstrap-server 127.0.0.1:9092 --describe --group my-first-application
+
+
+# producer with keys
+kafka-console-producer.sh --broker-list 127.0.0.1:9092 --topic first_topic --property parse.key=true --property key.separator=,
+> key,value
+> another key,another value
+
+# consumer with keys
+kafka-console-consumer.sh --bootstrap-server 127.0.0.1:9092 --topic first_topic --from-beginning --property print.key=true --property key.separator=,
+
+
+# configuration for a topic
+kafka-configs.sh --zookeeper 127.0.0.1:2181 --entity-type topics --entity-name configured-topic --describe
+
+# set a config for a topic
+kafka-configs.sh --zookeeper 127.0.0.1:2181 --entity-type topics --entity-name configured-topic --add-config min.insync.replicas=2 --alter
+
+-----
+Real World Exercise
+
+Real-World Exercise:
+Before jumping to the next section for the solution, here are some pointers for some exercises:
+
+Twitter Producer
+
+The Twitter Producer gets data from Twitter based on some keywords and put them in a Kafka topic of your choice
+
+Twitter Java Client: https://github.com/twitter/hbc
+
+Twitter API Credentials: https://developer.twitter.com/
+
+ElasticSearch Consumer
+
+The ElasticSearch Consumer gets data from your twitter topic and inserts it into ElasticSearch
+
+ElasticSearch Java Client: https://www.elastic.co/guide/en/elasticsearch/client/java-rest/6.4/java-rest-high.html
+
+ElasticSearch setup:
+
+https://www.elastic.co/guide/en/elasticsearch/reference/current/setup.html
+
+OR https://bonsai.io/
+
+
+# create the topic before running the producer java code
+kafka-topics.sh --zookeeper 127.0.0.1:2181 --topic twitter_tweets --create --partitions 6 --replication-factor 1
+
+# launch a console consumer before running our producer java code
+kafka-console-consumer.sh --bootstrap-server 127.0.0.1:9092 --topic twitter_tweets
+
+# now run our java code producer
+
+
+------
+Idempotent Producer - the problem is that a Producer can introduce duplicate messages in Kafka due to network errors.
+For example: the ack sent back from Kafka broker does not reach the producer due to a network error.
+
+To solve this a produce request id is sent and can see that it is a duplicate message.
+
+Settings: (should be set by default)
+-retries = Integer.MAX_VALUE (2^31-1 = 2147483647)
+-max.in.flight.requests=5
+-acks=all
+(need to set)
+-producerProps.put("enable.indempotence", true) // producer level
+-min.insync.replicas=2 // broker/topic level
+
+Running a "safe producer" might impact throughput and latency, always test for your use case
+
+------
+Message Compression - very important
++ much smaller producer request size
++ faster to transfer data over the network, less latency
++ better throughput
++ better disk utilization (stored messages on disk are smaller)
+- producers use some CPU cycles to compress
+- consumers use some CPU cycles to decompress
+
+# set at Producer level
+"compression type" can be none (default), gzip, lz4, snappy
+
+Producer Batching
+-consider tweaking "linger.ms" and "batch.size" to have bigger batches, to get more compression and higher throughput
+-by default, Kafka tries to send records as soon as possible. It will have up to 5 requests in flight, meaning up to 
+5 messages individually sent at the same time
+
+linger.ms - number of milliseconds a producer is willing to wait before sending a batch out (default 0)
+linger.ms=5 (5 milliseconds)
+
+batch.size = if a batch is full before the end of the linger.ms period, it will be sent to Kafka right away
+- maximum number of bytes that will be included in a batch. The default is 16KB. Increasing to 32KB or 64KB can help
+increasing the compression, throughput, and efficiency of requests
+
+------
+High Throughput Producer Demo: ProducerDemoHighThroughput.java
+- snappy for compression, good for text-based messages such as logs and JSON, etc.
+- batch.size = 32KB
+- linger.ms = 20ms
+
+
+------
+
+Kafka Connect
+
+# need to move properties file and directory over first to a connectors directory?
+connect-standalone.sh --bootstrap-server 127.0.0.1:9092 --topic twitter_status_connect --from-beginning
+
+# run the twitter connector
+connect-standalone.sh connect-standalone.properties twitter.properties
+
+
+------
+
+Kafka Monitoring
+
+https://kafka.apache.org/documentation/#monitoring
+https://docs.confluent.io/current/kafka/monitoring.html
+https://www.datadoghq.com/blog/monitoring-kafka-performance-metrics
+
+Kafka Operations - need to be learned and practiced
+- rolling restart of brokers
+- updating configurations
+- rebalancing partitions
+- increasing replication factor
+- adding a broker
+- replacing a broker
+- removing a broker
+- upgrading a kafka cluster with zero downtime
+
+
+------
+
+Kafka Authentication and Authorization
+- encryption + authentication + authorization
+
+-SSL Authentication: clients authenticate to Kafka using SSL certificates
+-SASL Authentication:
+  - PLAIN: clients authenticate using username/password (weak - easy to setup)
+  - Kerberos: such as Microsoft Active Directory (strong - hard to setup)
+  - SCRAM: username/password (strong - medium to setup)
+
+Kafka Authorization
+- After authentication, set authorization, for example read/write settings to topics:
+  "User alice can view topic finance"
+  "User bob cannot view topis trucks"
+- ACL (Access Control Lists) - have to be maintained
+ 
+
+------
+
+Kafka Multi Cluster + Replication
+- Kafka works in a single region. So multiple Kafka clusters are setup across different countries, which will need replicate
+- Replicating does not preserve offsets, just data
+- Different tools:
+  - Mirror Maker - open source tool that ships with Kafka, can be tricky with large number of deployments
+  - Netflix uses Flink - they wrote their own application
+  - Uber uses uReplicator - addresses performance and operations issues with Mirror Maker
+  - Comcast has their own open source Kafka Connect Source
+  - Confluent has their own Kafka Connect Source (paid)
+
+
+------
+
+Docker
+
+https://github.com/simplesteph/kafka-stack-docker-compose
+
+#refer to readme.md
+# single kafka brokers
+# start it up
+docker-compose -f zk-single-kafka-single.yml up
+
+# some simple tests against this
+# create topic
+kafka-topics.sh --zookeeper 127.0.0.1:2181 --topic test01 --create --partitions 3 --replication-factor 1
+
+# produce some data
+kafka-console-producer.sh --broker-list 127.0.0.1:9092 --topic test01
+>hello
+>world
+>bye
+>^C
+
+# consume some data
+kafka-console-consumer.sh --bootstrap-server 127.0.0.1:9092 --topic test01 --from-beginning
+
+# stop it
+docker-compose -f zk-single-kafka-single.yml stop
+# completely bring it down and remove it
+docker-compose -f zk-single-kafka-single.yml down
+
+
+# multiple kafka brokers
+docker-compose -f zk-single-kafka-multiple.yml up
+docker-compose -f zk-single-kafka-multiple.yml down
+
+# multiple kafka brokers(3) and multiple zookeepers (3)
+docker-compose -f zk-multiple-kafka-multiple.yml up
+
+# some simple tests against this
+# create topics
+kafka-topics.sh --zookeeper 127.0.0.1:2181 --topic test01 --create --partitions 6 --replication-factor 2
+kafka-topics.sh --zookeeper 127.0.0.1:2181 --topic test02 --create --partitions 12 --replication-factor 3
+kafka-topics.sh --zookeeper 127.0.0.1:2181 --describe
+
+# producer - optionally provide a list of brokers
+kafka-console-producer.sh --broker-list 127.0.0.1:9092,127.0.0.1:9093,127.0.0.1:9094 --topic test01
+>hello
+>world
+>working
+>^C
+
+# consume - as a test pick a broker
+kafka-console-consumer.sh --bootstrap-server 127.0.0.1:9092 --topic test01 --from-beginning
+
+# stop and remove
+docker-compose -f zk-multiple-kafka-multiple.yml stop
+docker-compose -f zk-multiple-kafka-multiple.yml down
+
+
+docker-compose -f full-stack.yml up
+docker-compose -f full-stack.yml down
+
+------
+
+Create AWS EC2 instance: free tier Amazon Linux
+
+# ssh to using .pem created
+ssh -i "my-pem-file.pem" ec2-user@ec2-xx-xx-xxx-xx.compute-1.amazonaws.com
+
+# install kafka on it
+mkdir kafka
+cd kafka
+wget http://mirrors.ibiblio.org/apache/kafka/2.3.0/kafka_2.11-2.3.0.tgz
+tar -xvf kafka_2.11-2.3.0.tgz
+cd kafka_2.11-2.3.0
+
+# install java 8
+sudo yum install java-1.8.0-openjdk
+
+# since small VM
+export KAFKA_HEAP_OPTS="-Xmx256M -Xms128M"
+
+# edit .bashrc and add to end of file
+vi .bashrc
+export PATH=/home/ec2-user/kafka/kafka_2.11-2.3.0/bin:$PATH
+
+# load the changes to .bashrc
+source ~/.bashrc
+
+# start zookeeper as a daemon process
+zookeeper-server-start.sh -daemon config/zookeeper.properties
+
+#edit config properties and put in public ip of AWS EC2 VM, since kafka will by default use the private IP address
+#but we need to create producer and consumer using CLI from a remote machine
+vi config/server.properties
+#advertised.listeners=PLAINTEXT://your.host.name:9092
+advertised.listeners=PLAINTEXT://52.23.196.97:9092
+
+# start kafka
+kafka-server-start.sh config/server.properties
+
+# on my local system (not on AWS EC2 VM)
+kafka-console-producer.sh --broker-list <public-ip-aws-ec2-vm>:9092 --topic mytopic
+>hello
+>world
+>^C
+
+kafka-console-consumer.sh --bootstrap-server <public-ip-aws-ec2-vm>:9092 --topic mytopic --from-beginning
+# see messages above displayed
+
+kafka-consumer-groups.sh --bootstrap-server <public-ip-aws-ec2-vm>:9092 --list
+------
+
+What's next
+
+Dev
+-Kafka Connect
+-Kafka Streams
+-Confluent Schema Registry
+
+Admin
+-Kafka Setup
+-Kafka Monitoring
+-Kafka Security
+
+
+
