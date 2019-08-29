@@ -137,11 +137,19 @@ Error while executing topic command : Replication factor: 2 larger than availabl
 kafka-topics.sh --zookeeper 127.0.0.1:2181 --topic first_topic --create --partitions 3 --replication-factor 1
 kafka-topics.sh --zookeeper 127.0.0.1:2181 --topic second_topic --create --partitions 6 --replication-factor 1
 
+# from apis course
+# create a new topic with a replication factor value set to 1
+kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic apis
+
 # list topics
 kafka-topics.sh --zookeeper 127.0.0.1:2181 --list
+# from apis course
+kafka-topics.sh --list --bootstrap-server localhost:9092
 
 # describe a topics
 kafka-topics.sh --zookeeper 127.0.0.1:2181 --topic first_topic --describe
+# from apis course
+kafka-topics.sh --describe --bootstrap-server localhost:9092 --topic apis
 
 # delete a topic
 kafka-topics.sh --zookeeper 127.0.0.1:2181 --topic second_topic --delete
@@ -476,5 +484,103 @@ Admin
 -Kafka Monitoring
 -Kafka Security
 
+----
+
+apis kafka course notes:
+
+# telnet connection to zookeeper
+telnet localhost 2181
+
+# type four letter commands to zookeeper
+# server status
+srvr
+
+# for testing purposes create a second kafka broker on the same system (not good for production but good for testing)
+cd /home/kits/kafka/kafka_2.12-2.3.0/config/
+cp server.properties server-1.properties
+cp server.properties server-2.properties
+cd ../data
+mkdir kafka-1
+mkdir kafka-2
+
+vi server-1.properties
+# change to:
+broker.id=1
+listeners=PLAINTEXT://:9093
+# add localhost
+listeners=PLAINTEXT://localhost:9093
+log.dirs=/home/kits/kafka/kafka_2.12-2.3.0/data/kafka-1
+vi server-2.properties
+# change to:
+broker.id=2
+# add localhost
+listeners=PLAINTEXT://localhost:9094
+log.dirs=/home/kits/kafka/kafka_2.12-2.3.0/data/kafka-2
+
+# start the other two brokers in separate ssh sessions
+kafka-server-start.sh config/server-1.properties
+kafka-server-start.sh config/server-2.properties
+
+# create a topic with a replication factor value set to 3
+kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 3 --partitions 3 --topic test
+
+# run the describe topics command to see which broker is doing what
+kafka-topics.sh --describe --topic test --bootstrap-server localhost:9092
 
 
+# create a new topic with a replication factor value set to 1
+kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic test2
+
+# verify the topic is created with:
+kafka-topics.sh --list --bootstrap-server localhost:9092
+
+# then we can send some messages with:
+kafka-console-producer.sh --broker-list localhost:9092 --topic test
+>message 1
+>message 2
+>^C
+
+# we can list the messages:
+kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test --from-beginning
+
+
+# read from specific partitions and offsets
+
+# start a consumer and read from a certain partition
+kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test --from-beginning --partition 0
+
+# start a consumer and read from a certain partition, using offset
+kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test --from-beginning --offset 0
+
+
+# consumer groups:
+
+# join consumer in a specific group
+kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test --group apis-group
+
+# list the consumer group configuration
+kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group apis-group
+
+# list all consumer groups across all topics
+kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list
+
+# resetting the offset to read them again
+kafka-consumer-groups.sh --bootstrap-server localhost:9092 --group apis-group --reset-offsets --to-earliest --execute --topic test
+
+# list all consumer groups
+kafka-consumer-groups.sh --bootstrap-server localhost:9092 --list
+
+# list of all active members in the consumer group
+kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group apis-group --members
+
+
+# Kafka Connect
+
+# create a file with some content
+echo -e “foobar” > test.txt
+
+# create a standalone connection to Kafka and send the file
+connect-standalone.sh config/connect-standalone.properties config/connect-file-source.properties config/connect-file-sink.properties
+
+# check the content of the synced file
+cat test.sink.txt
