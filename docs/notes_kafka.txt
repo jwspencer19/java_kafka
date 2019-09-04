@@ -584,3 +584,16 @@ connect-standalone.sh config/connect-standalone.properties config/connect-file-s
 
 # check the content of the synced file
 cat test.sink.txt
+
+
+-------
+
+Kafka on nBA
+
+kafka manager
+http://10.20.208.120:9000
+
+kafka-topics.sh --list --bootstrap-server 10.20.208.120:9094
+
+kafka-console-consumer.sh --bootstrap-server 10.20.208.120:9094 --topic Subscriber.User_Plane --from-beginning
+
