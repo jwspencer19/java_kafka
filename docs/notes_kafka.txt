@@ -585,6 +585,48 @@ connect-standalone.sh config/connect-standalone.properties config/connect-file-s
 # check the content of the synced file
 cat test.sink.txt
 
+# also run consumer to read from the connect-test topic
+kafka-console-consumer.sh --bootstrap-server 127.0.0.1:9092 --topic connect-test --from-beginning
+
+
+# Kafka Security
+- Encrypting using SSL (TLS)
+- Authentication using SSL (TLS) and SASL
+- Authorization and ACLs
+
+
+# generate key and certificate for each broker, valid for 30 days
+keytool -keystore server.keystore.jks -alias localhost -validity 30 -genkey -keyalg RSA
+
+# -or- specifying a hostname in the certificate
+keytool -keystore server.keystore.jks -alias localhost -validity 30 -genkey -keyalg RSA -ext SAN=DNS:bos-spencer-nba-test
+
+# list the keystore
+keytool -list -v -keystore server.keystore.jks
+
+# create a CA
+openssl req -new -x509 -keyout ca-key -out ca-cert -days 30
+
+# add the generated CA to the clients truststore file
+# note: normally the client (producer) is a separate system than the broker
+#  and would be run on a separate system
+keytool -keystore client.truststore.jks -alias CARoot -import -file ca-cert
+
+# when brokers are configured to require client authentication by
+# ssl.client.auth, a truststore must be provided and it should have all the CA
+# certificates
+# note: this would be run on the broker
+keytool -keystore server.truststore.jks -alias CARoot -import -file ca-cert
+
+# export the server certificate
+keytool -keystore server.keystore.jks -alias localhost -certreq -file cert-file
+
+# sign the certificate
+openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file -out cert-signed -days 30 -CAcreateserial
+
+# import both CA and signed certificates into the keystore
+keytool -keystore server.keystore.jks -alias CARoot -import -file ca-cert
+keytool -keystore server.keystore.jks -alias localhost -import -file cert-signed
 
 -------
 
