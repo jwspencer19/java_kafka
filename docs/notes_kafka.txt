@@ -108,7 +108,12 @@ zookeeper-server-start.sh -daemon config/zookeeper.properties
 cd /home/kits/kafka/kafka_2.12-2.3.0
 mkdir data/kafka
 kafka-server-start.sh config/server.properties
+kafka-server-start.sh config/server-1.properties
+kafka-server-start.sh config/server-2.properties
+# start as background task
 kafka-server-start.sh -daemon config/server.properties
+kafka-server-start.sh -daemon config/server-1.properties
+kafka-server-start.sh -daemon config/server-2.properties
 
 Elasticsearch
 
@@ -627,6 +632,71 @@ openssl x509 -req -CA ca-cert -CAkey ca-key -in cert-file -out cert-signed -days
 # import both CA and signed certificates into the keystore
 keytool -keystore server.keystore.jks -alias CARoot -import -file ca-cert
 keytool -keystore server.keystore.jks -alias localhost -import -file cert-signed
+
+
+# Authentication with SASL
+There are several supported SASL mechanisms:
+- Kerberos
+- OAUTHBEARER
+- SCRAM
+- PLAIN
+
+
+# Authorization - stored in zookeeper
+
+# add all user ACL
+kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:* --allow-host * --operation Read --topic test
+
+# list ACLs
+kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic test
+
+
+# Troubleshooting and Metrics
+
+# list brokers registered in zookeeper
+zookeeper-shell.sh localhost:2181 ls /brokers/ids
+
+# get details on specific broker in zookeeper
+zookeeper-shell.sh localhost:2181 get /brokers/ids/0
+
+# to get metrics 
+# enable JMX for zookeeper
+# note: probably not best method to add environment variable in the sh file, but good for now.
+vi bin/zookeeper-server-start.sh
+# insert the following line, before the last line in the file
+export KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=192.168.175.59 -Dcom.sun.management.jmxremote.port=9998"
+
+# enable JMX for kafka brokers
+vi kafka-server-start.sh
+# only difference is the port which is 9999, this only works for a single broker for our initial testing is fine
+# insert the following line, before the last line in the file
+export KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=192.168.175.59 -Dcom.sun.management.jmxremote.port=9999"
+
+# when starting kafka, look at output or log file for the Cluster ID
+[2019-09-11 17:46:47,717] INFO Cluster ID = 90IgX4mXRxmWWJ6OBJmXew (kafka.server.KafkaServer)
+
+# check for open ports from Linux
+netstat -tulpn
+
+
+# enable JMX for kafka producers, similar to consumers
+vi kafka-console-producer.sh
+export KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=192.168.175.59 -Dcom.sun.management.jmxremote.port=9997"
+
+
+
+# GUI Tools
+
+# Kafka Manager
+https://github.com/yahoo/kafka-manager
+
+# Kafka Tool
+http://www.kafkatool.com
+# install it
+sh kafkatool.sh
+# start it
+kafkatool
+
 
 -------
 
